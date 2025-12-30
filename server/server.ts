@@ -1,6 +1,8 @@
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import mysql from 'mysql2';
+
 
 // configures dotenv to work in your application
 dotenv.config();
@@ -15,6 +17,23 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT;
+
+// Create the connection to database
+const connection = mysql.createConnection({
+  host: `${process.env.MYSQL_HOST}`,
+  user: `${process.env.MYSQL_USER}`,
+  password: `${process.env.MYSQL_PASSWORD}`,
+  database: `${process.env.MYSQL_DATABASE}`,
+});
+
+connection.query(
+  'SELECT * FROM `test`',
+  function (err, results, fields) {
+    console.log(results); // results contains rows returned by server
+    console.log(fields); // fields contains extra meta data about results, if available
+  }
+);
+
 
 // Health check endpoint
 app.get("/", (request: Request, response: Response) => {
@@ -71,6 +90,48 @@ app.get("/api/user/collections/:username", async (request: Request, response: Re
 
   } catch (error) {
     console.error('Error fetching BGG collection:', error);
+    response.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get("/api/game/:id", async (request: Request, response: Response) => {
+  try {
+    const id = request.params.id;
+
+    const requestUrl = `${process.env.BGG_BASE_URL}thing?id=${id}`;
+
+    const bggResponse = await fetch(requestUrl, {
+      headers: {
+        'Accept': 'application/xml',
+        'Authorization': `Bearer ${process.env.BGG_API_KEY}`
+      }
+    });
+
+    if (!bggResponse.ok) {
+      return response.status(bggResponse.status).json({
+        error: 'Failed to fetch collection from BoardGameGeek',
+        status: bggResponse.status
+      });
+    }
+
+        const xmlData = await bggResponse.text();
+
+    if (xmlData.includes('message="Your request for this collection has been accepted')) {
+      return response.status(202).json({
+        message: 'Item is being loaded by BoardGameGeek, please retry in a few seconds',
+        retry: true
+      });
+    }
+
+    // Return the XML data
+    response.set('Content-Type', 'application/xml');
+    response.send(xmlData);
+
+  } catch (error) {
+    console.error('Error fetching BGG item:', error);
     response.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'
