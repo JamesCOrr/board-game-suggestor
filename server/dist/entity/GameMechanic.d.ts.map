@@ -1,0 +1,1 @@
+{"version":3,"file":"GameMechanic.d.ts","sourceRoot":"","sources":["../../src/entity/GameMechanic.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,IAAI,EAAE,MAAM,QAAQ,CAAC;AAE9B,qBACa,YAAY;IAGrB,EAAE,EAAE,MAAM,CAAC;IAGX,MAAM,EAAE,MAAM,CAAC;IAGf,IAAI,EAAE,IAAI,CAAC;IAGX,SAAS,EAAE,IAAI,CAAC;IAGhB,SAAS,EAAE,IAAI,CAAC;CACnB"}

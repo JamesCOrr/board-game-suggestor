@@ -2,6 +2,9 @@ import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import mysql from 'mysql2';
+import "reflect-metadata";
+import { AppDataSource } from "./data-source"
+import { User } from "./entity/User"
 
 
 // configures dotenv to work in your application
@@ -33,6 +36,22 @@ connection.query(
     console.log(fields); // fields contains extra meta data about results, if available
   }
 );
+
+AppDataSource.initialize().then(async () => {
+
+    console.log("Inserting a new user into the database...")
+    const user = new User()
+    user.userName = "James_Orr"
+    await AppDataSource.manager.save(user)
+    console.log("Saved a new user with id: " + user.id)
+
+    console.log("Loading users from the database...")
+    const users = await AppDataSource.manager.find(User)
+    console.log("Loaded users: ", users)
+
+    console.log("Here you can setup and run express / fastify / any other framework.")
+
+}).catch(error => console.log(error))
 
 
 // Health check endpoint
