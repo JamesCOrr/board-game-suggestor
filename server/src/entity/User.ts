@@ -1,18 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn } from "typeorm";
 
 @Entity()
 export class User {
-
-    @PrimaryGeneratedColumn()
-    id: number;
-
-    @Column()
+    @PrimaryColumn()
     userName: string;
 
     @CreateDateColumn()
     createdAt: Date; // Automatically set on entity insertion
     
     @UpdateDateColumn()
-    updatedAt: Date; // Automatically updated every time the entity is saved
-    
+    updatedAt: Date;
 }

@@ -1,24 +1,21 @@
-import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryGeneratedColumn } from "typeorm"
+import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn } from "typeorm";
 
 @Entity()
 export class CollectionGame {
 
-    @PrimaryGeneratedColumn()
-    id: number;
-
-    @Column()
+    @PrimaryColumn()
     bggId: number;
 
-    @Column()
+    @PrimaryColumn()
     userName: string;
 
     @Column()
-    userRating: number;
+    userRating: string;
 
     @CreateDateColumn()
-    createdAt: Date; // Automatically set on entity insertion
+    createdAt: Date;
 
     @UpdateDateColumn()
-    updatedAt: Date; // Automatically updated every time the entity is saved
+    updatedAt: Date;
 
 }

@@ -3,15 +3,15 @@ import dotenv from "dotenv";
 import cors from "cors";
 import mysql from 'mysql2';
 import "reflect-metadata";
-import { AppDataSource } from "./data-source"
-import { User } from "./entity/User"
+import { AppDataSource } from "./data-source";
+import { User } from "./entity/User";
+import { Parser } from "xml2js";
+import { CollectionGame } from "./entity/CollectionGame";
 
 
-// configures dotenv to work in your application
 dotenv.config();
 const app = express();
 
-// Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || "http://localhost:5173",
   credentials: true
@@ -20,37 +20,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT;
-
-// Create the connection to database
-const connection = mysql.createConnection({
-  host: `${process.env.MYSQL_HOST}`,
-  user: `${process.env.MYSQL_USER}`,
-  password: `${process.env.MYSQL_PASSWORD}`,
-  database: `${process.env.MYSQL_DATABASE}`,
-});
-
-connection.query(
-  'SELECT * FROM `test`',
-  function (err, results, fields) {
-    console.log(results); // results contains rows returned by server
-    console.log(fields); // fields contains extra meta data about results, if available
-  }
-);
+const parser = new Parser();
 
 AppDataSource.initialize().then(async () => {
-
-    console.log("Inserting a new user into the database...")
     const user = new User()
     user.userName = "James_Orr"
     await AppDataSource.manager.save(user)
-    console.log("Saved a new user with id: " + user.id)
-
-    console.log("Loading users from the database...")
-    const users = await AppDataSource.manager.find(User)
-    console.log("Loaded users: ", users)
-
-    console.log("Here you can setup and run express / fastify / any other framework.")
-
 }).catch(error => console.log(error))
 
 
@@ -68,15 +43,10 @@ app.get("/", (request: Request, response: Response) => {
 // Get user's board game collection from BoardGameGeek
 app.get("/api/user/collections/:username", async (request: Request, response: Response) => {
   try {
-    // Get username from URL params or use default
-    const username = request.params.username || 'James_Orr';
+    const username = request.params.username || '';
 
-    // Build BGG API URL
     const requestUrl = `${process.env.BGG_BASE_URL}collection?username=${username}&stats=1`;
 
-    console.log(`Fetching collection for user: ${username}`);
-
-    // Fetch from BoardGameGeek API
     const bggResponse = await fetch(requestUrl, {
       headers: {
         'Accept': 'application/xml',
@@ -91,11 +61,8 @@ app.get("/api/user/collections/:username", async (request: Request, response: Re
       });
     }
 
-    // BGG returns XML, so we'll return it as text
-    // You may want to parse this to JSON on the client or use an XML parser here
     const xmlData = await bggResponse.text();
 
-    // Check if BGG is asking us to retry (they do this when data is being cached)
     if (xmlData.includes('message="Your request for this collection has been accepted')) {
       return response.status(202).json({
         message: 'Collection is being loaded by BoardGameGeek, please retry in a few seconds',
@@ -103,10 +70,30 @@ app.get("/api/user/collections/:username", async (request: Request, response: Re
       });
     }
 
-    // Return the XML data
-    response.set('Content-Type', 'application/xml');
-    response.send(xmlData);
+    let jsonData;
 
+    parser.parseString(xmlData, function (err, result) {
+      response.set('Content-Type', 'application/json');
+      jsonData = result;
+
+      // TODO: Make game object shape
+      jsonData.items.item.forEach(async (game: any) => {
+        const collectionGame = new CollectionGame();
+        collectionGame.bggId = game.$.objectid;
+        collectionGame.userName = username;
+        collectionGame.userRating = game.stats[0].rating[0].$.value;
+        try {
+          await AppDataSource.manager.save(collectionGame);
+        } catch (e) {
+          console.error(e);
+        }
+      });
+
+      response.send(jsonData);
+    });
+
+
+    
   } catch (error) {
     console.error('Error fetching BGG collection:', error);
     response.status(500).json({
@@ -136,7 +123,7 @@ app.get("/api/game/:id", async (request: Request, response: Response) => {
       });
     }
 
-        const xmlData = await bggResponse.text();
+    const xmlData = await bggResponse.text();
 
     if (xmlData.includes('message="Your request for this collection has been accepted')) {
       return response.status(202).json({

@@ -1,8 +1,7 @@
 export declare class CollectionGame {
-    id: number;
     bggId: number;
     userName: string;
-    userRating: number;
+    userRating: string;
     createdAt: Date;
     updatedAt: Date;
 }

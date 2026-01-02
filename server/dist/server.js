@@ -6,14 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
-const mysql2_1 = __importDefault(require("mysql2"));
 require("reflect-metadata");
 const data_source_1 = require("./data-source");
 const User_1 = require("./entity/User");
-// configures dotenv to work in your application
+const xml2js_1 = require("xml2js");
+const CollectionGame_1 = require("./entity/CollectionGame");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-// Middleware
 app.use((0, cors_1.default)({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true
@@ -21,27 +20,11 @@ app.use((0, cors_1.default)({
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 const PORT = process.env.PORT;
-// Create the connection to database
-const connection = mysql2_1.default.createConnection({
-    host: `${process.env.MYSQL_HOST}`,
-    user: `${process.env.MYSQL_USER}`,
-    password: `${process.env.MYSQL_PASSWORD}`,
-    database: `${process.env.MYSQL_DATABASE}`,
-});
-connection.query('SELECT * FROM `test`', function (err, results, fields) {
-    console.log(results); // results contains rows returned by server
-    console.log(fields); // fields contains extra meta data about results, if available
-});
+const parser = new xml2js_1.Parser();
 data_source_1.AppDataSource.initialize().then(async () => {
-    console.log("Inserting a new user into the database...");
     const user = new User_1.User();
     user.userName = "James_Orr";
     await data_source_1.AppDataSource.manager.save(user);
-    console.log("Saved a new user with id: " + user.id);
-    console.log("Loading users from the database...");
-    const users = await data_source_1.AppDataSource.manager.find(User_1.User);
-    console.log("Loaded users: ", users);
-    console.log("Here you can setup and run express / fastify / any other framework.");
 }).catch(error => console.log(error));
 // Health check endpoint
 app.get("/", (request, response) => {
@@ -55,12 +38,8 @@ app.get("/", (request, response) => {
 // Get user's board game collection from BoardGameGeek
 app.get("/api/user/collections/:username", async (request, response) => {
     try {
-        // Get username from URL params or use default
-        const username = request.params.username || 'James_Orr';
-        // Build BGG API URL
+        const username = request.params.username || '';
         const requestUrl = `${process.env.BGG_BASE_URL}collection?username=${username}&stats=1`;
-        console.log(`Fetching collection for user: ${username}`);
-        // Fetch from BoardGameGeek API
         const bggResponse = await fetch(requestUrl, {
             headers: {
                 'Accept': 'application/xml',
@@ -73,19 +52,32 @@ app.get("/api/user/collections/:username", async (request, response) => {
                 status: bggResponse.status
             });
         }
-        // BGG returns XML, so we'll return it as text
-        // You may want to parse this to JSON on the client or use an XML parser here
         const xmlData = await bggResponse.text();
-        // Check if BGG is asking us to retry (they do this when data is being cached)
         if (xmlData.includes('message="Your request for this collection has been accepted')) {
             return response.status(202).json({
                 message: 'Collection is being loaded by BoardGameGeek, please retry in a few seconds',
                 retry: true
             });
         }
-        // Return the XML data
-        response.set('Content-Type', 'application/xml');
-        response.send(xmlData);
+        let jsonData;
+        parser.parseString(xmlData, function (err, result) {
+            response.set('Content-Type', 'application/json');
+            jsonData = result;
+            // TODO: Make game object shape
+            jsonData.items.item.forEach(async (game) => {
+                const collectionGame = new CollectionGame_1.CollectionGame();
+                collectionGame.bggId = game.$.objectid;
+                collectionGame.userName = username;
+                collectionGame.userRating = game.stats[0].rating[0].$.value;
+                try {
+                    await data_source_1.AppDataSource.manager.save(collectionGame);
+                }
+                catch (e) {
+                    console.error(e);
+                }
+            });
+            response.send(jsonData);
+        });
     }
     catch (error) {
         console.error('Error fetching BGG collection:', error);

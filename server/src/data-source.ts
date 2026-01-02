@@ -4,7 +4,7 @@ import { User } from "./entity/User"
 import { Game } from "./entity/Game"
 import { GameMechanic } from "./entity/GameMechanic"
 import { CollectionGame } from "./entity/CollectionGame"
-import dotenv from "dotenv"
+import dotenv from "dotenv";
 
 // Load environment variables BEFORE creating DataSource
 dotenv.config();
