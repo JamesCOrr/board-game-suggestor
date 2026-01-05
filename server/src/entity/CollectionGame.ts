@@ -7,6 +7,9 @@ export class CollectionGame {
     bggId: number;
 
     @PrimaryColumn()
+    gameName: string;
+
+    @PrimaryColumn()
     userName: string;
 
     @Column()

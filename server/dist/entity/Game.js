@@ -15,6 +15,7 @@ const GameMechanic_1 = require("./GameMechanic");
 let Game = class Game {
     bggId;
     bggUrl;
+    gameName;
     gameMechanics;
     createdAt;
     updatedAt;
@@ -28,6 +29,10 @@ __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], Game.prototype, "bggUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)(),
+    __metadata("design:type", String)
+], Game.prototype, "gameName", void 0);
 __decorate([
     (0, typeorm_1.OneToMany)(() => GameMechanic_1.GameMechanic, (gameMechanic) => gameMechanic.game),
     __metadata("design:type", Array)

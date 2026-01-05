@@ -13,6 +13,7 @@ exports.CollectionGame = void 0;
 const typeorm_1 = require("typeorm");
 let CollectionGame = class CollectionGame {
     bggId;
+    gameName;
     userName;
     userRating;
     createdAt;
@@ -23,6 +24,10 @@ __decorate([
     (0, typeorm_1.PrimaryColumn)(),
     __metadata("design:type", Number)
 ], CollectionGame.prototype, "bggId", void 0);
+__decorate([
+    (0, typeorm_1.PrimaryColumn)(),
+    __metadata("design:type", String)
+], CollectionGame.prototype, "gameName", void 0);
 __decorate([
     (0, typeorm_1.PrimaryColumn)(),
     __metadata("design:type", String)

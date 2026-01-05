@@ -80,6 +80,7 @@ app.get("/api/user/collections/:username", async (request: Request, response: Re
       jsonData.items.item.forEach(async (game: any) => {
         const collectionGame = new CollectionGame();
         collectionGame.bggId = game.$.objectid;
+        collectionGame.gameName = game.name[0]._;
         collectionGame.userName = username;
         collectionGame.userRating = game.stats[0].rating[0].$.value;
         try {
