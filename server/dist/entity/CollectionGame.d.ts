@@ -1,4 +1,5 @@
 export declare class CollectionGame {
+    id: number;
     bggId: number;
     gameName: string;
     userName: string;

@@ -8,10 +8,13 @@ export class Game {
     bggId: number;
 
     @Column()
-    bggUrl: string;
+    gameName: string;
 
     @Column()
-    gameName: string;
+    bggLink: string;
+
+    @Column()
+    bggImageLink: string;
 
     @OneToMany(() => GameMechanic, (gameMechanic) => gameMechanic.game)
     gameMechanics: GameMechanic[];

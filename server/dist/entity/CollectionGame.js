@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CollectionGame = void 0;
 const typeorm_1 = require("typeorm");
 let CollectionGame = class CollectionGame {
+    id;
     bggId;
     gameName;
     userName;
@@ -21,15 +22,19 @@ let CollectionGame = class CollectionGame {
 };
 exports.CollectionGame = CollectionGame;
 __decorate([
-    (0, typeorm_1.PrimaryColumn)(),
+    (0, typeorm_1.PrimaryGeneratedColumn)(),
+    __metadata("design:type", Number)
+], CollectionGame.prototype, "id", void 0);
+__decorate([
+    (0, typeorm_1.Column)(),
     __metadata("design:type", Number)
 ], CollectionGame.prototype, "bggId", void 0);
 __decorate([
-    (0, typeorm_1.PrimaryColumn)(),
+    (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], CollectionGame.prototype, "gameName", void 0);
 __decorate([
-    (0, typeorm_1.PrimaryColumn)(),
+    (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], CollectionGame.prototype, "userName", void 0);
 __decorate([

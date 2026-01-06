@@ -1,8 +1,9 @@
 import { GameMechanic } from "./GameMechanic";
 export declare class Game {
     bggId: number;
-    bggUrl: string;
     gameName: string;
+    bggLink: string;
+    bggImageLink: string;
     gameMechanics: GameMechanic[];
     createdAt: Date;
     updatedAt: Date;

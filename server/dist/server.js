@@ -11,6 +11,7 @@ const data_source_1 = require("./data-source");
 const User_1 = require("./entity/User");
 const xml2js_1 = require("xml2js");
 const CollectionGame_1 = require("./entity/CollectionGame");
+const Game_1 = require("./entity/Game");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
@@ -59,10 +60,9 @@ app.get("/api/user/collections/:username", async (request, response) => {
                 retry: true
             });
         }
-        let jsonData;
         parser.parseString(xmlData, function (err, result) {
             response.set('Content-Type', 'application/json');
-            jsonData = result;
+            const jsonData = result;
             // TODO: Make game object shape
             jsonData.items.item.forEach(async (game) => {
                 const collectionGame = new CollectionGame_1.CollectionGame();
@@ -82,6 +82,107 @@ app.get("/api/user/collections/:username", async (request, response) => {
     }
     catch (error) {
         console.error('Error fetching BGG collection:', error);
+        response.status(500).json({
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+app.get("/api/games/:username", async (request, response) => {
+    try {
+        const username = request.params.username || '';
+        if (username === '') {
+            return response.status(400).json({
+                error: 'Username is required'
+            });
+        }
+        // Get all games from user's collection
+        const collectionGames = await data_source_1.AppDataSource
+            .getRepository(CollectionGame_1.CollectionGame)
+            .createQueryBuilder("collection_game")
+            .where("collection_game.userName = :username", { username })
+            .getMany();
+        if (collectionGames.length === 0) {
+            return response.status(404).json({
+                error: 'No games found for this user',
+                username
+            });
+        }
+        // Fetch detailed game data for each game in the collection
+        const gameDetailsPromises = collectionGames.map(async (collectionGame) => {
+            const requestUrl = `${process.env.BGG_BASE_URL}thing?id=${collectionGame.bggId}&stats=1`;
+            try {
+                const bggResponse = await fetch(requestUrl, {
+                    headers: {
+                        'Accept': 'application/xml',
+                        'Authorization': `Bearer ${process.env.BGG_API_KEY}`
+                    }
+                });
+                if (!bggResponse.ok) {
+                    console.error(`Failed to fetch game ${collectionGame.bggId}: ${bggResponse.status}`);
+                    return null;
+                }
+                const xmlData = await bggResponse.text();
+                // Parse XML to JSON
+                return new Promise((resolve, reject) => {
+                    parser.parseString(xmlData, async (err, result) => {
+                        if (err) {
+                            console.error(`Error parsing game ${collectionGame.bggId}:`, err);
+                            return resolve(null);
+                        }
+                        try {
+                            const gameData = result.items.item[0];
+                            // Save/update game in database
+                            const gameEntity = new Game_1.Game();
+                            gameEntity.bggId = parseInt(gameData.$.id);
+                            gameEntity.gameName = Array.isArray(gameData.name)
+                                ? gameData.name.find((n) => n.$.type === 'primary')?.$.value || gameData.name[0].$.value
+                                : gameData.name.$.value;
+                            gameEntity.bggLink = `https://boardgamegeek.com/boardgame/${gameData.$.id}`;
+                            gameEntity.bggImageLink = gameData.image?.[0] || '';
+                            await data_source_1.AppDataSource.manager.save(gameEntity);
+                            // Return combined data
+                            resolve({
+                                bggId: gameEntity.bggId,
+                                gameName: gameEntity.gameName,
+                                bggImageLink: gameEntity.bggImageLink,
+                                userRating: collectionGame.userRating,
+                                yearPublished: gameData.yearpublished?.[0]?.$.value,
+                                minPlayers: gameData.minplayers?.[0]?.$.value,
+                                maxPlayers: gameData.maxplayers?.[0]?.$.value,
+                                playingTime: gameData.playingtime?.[0]?.$.value,
+                                minPlayTime: gameData.minplaytime?.[0]?.$.value,
+                                maxPlayTime: gameData.maxplaytime?.[0]?.$.value,
+                                minAge: gameData.minage?.[0]?.$.value,
+                                description: gameData.description?.[0],
+                                averageRating: gameData.statistics?.[0]?.ratings?.[0]?.average?.[0]?.$.value,
+                                bggRank: gameData.statistics?.[0]?.ratings?.[0]?.ranks?.[0]?.rank?.find((r) => r.$.id === '1')?.$.value
+                            });
+                        }
+                        catch (e) {
+                            console.error(`Error processing game ${collectionGame.bggId}:`, e);
+                            resolve(null);
+                        }
+                    });
+                });
+            }
+            catch (error) {
+                console.error(`Error fetching game ${collectionGame.bggId}:`, error);
+                return null;
+            }
+        });
+        // Wait for all game details to be fetched
+        const allGameDetails = await Promise.all(gameDetailsPromises);
+        // Filter out any failed fetches
+        const successfulGames = allGameDetails.filter(game => game !== null);
+        response.status(200).json({
+            username,
+            totalGames: successfulGames.length,
+            games: successfulGames
+        });
+    }
+    catch (error) {
+        console.error('Error fetching games:', error);
         response.status(500).json({
             error: 'Internal server error',
             message: error instanceof Error ? error.message : 'Unknown error'

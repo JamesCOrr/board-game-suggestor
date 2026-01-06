@@ -1,15 +1,19 @@
-import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn } from "typeorm";
+import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn, OneToOne, PrimaryGeneratedColumn, JoinColumn } from "typeorm";
+import { Game } from "./Game";
 
 @Entity()
 export class CollectionGame {
+    
+    @PrimaryGeneratedColumn()
+    id: number
 
-    @PrimaryColumn()
+    @Column()
     bggId: number;
 
-    @PrimaryColumn()
+    @Column()
     gameName: string;
 
-    @PrimaryColumn()
+    @Column()
     userName: string;
 
     @Column()
@@ -20,5 +24,4 @@ export class CollectionGame {
 
     @UpdateDateColumn()
     updatedAt: Date;
-
 }
