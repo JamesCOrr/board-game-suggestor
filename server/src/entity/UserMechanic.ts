@@ -17,6 +17,9 @@ export class UserMechanic {
     @Column("decimal", { precision: 3, scale: 2 })
     averageRating: number;
 
+    @Column("int")
+    gameCount: number;
+
     @CreateDateColumn()
     createdAt: Date;
 

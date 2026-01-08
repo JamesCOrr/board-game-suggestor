@@ -100,6 +100,7 @@ async function populateUserMechanics() {
         userMechanic.userName = username;
         userMechanic.mechanicName = mechanicName;
         userMechanic.averageRating = parseFloat(average.toFixed(2));
+        userMechanic.gameCount = ratings.length;
 
         await AppDataSource.manager.save(userMechanic);
         savedCount++;

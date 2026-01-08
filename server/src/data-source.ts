@@ -18,7 +18,7 @@ export const AppDataSource = new DataSource({
     password: process.env.MYSQL_PASSWORD || "",
     database: process.env.MYSQL_DATABASE || "board_game_suggestor_dev_db",
     synchronize: true,
-    dropSchema: false, // Schema recreated with composite keys - back to false to preserve data
+    dropSchema: false,
     logging: false,
     entities: [User, Game, GameMechanic, CollectionGame, UserMechanic],
     migrations: [],
