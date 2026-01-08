@@ -4,6 +4,7 @@ import { User } from "./entity/User"
 import { Game } from "./entity/Game"
 import { GameMechanic } from "./entity/GameMechanic"
 import { CollectionGame } from "./entity/CollectionGame"
+import { UserMechanic } from "./entity/UserMechanic"
 import dotenv from "dotenv";
 
 // Load environment variables BEFORE creating DataSource
@@ -19,7 +20,7 @@ export const AppDataSource = new DataSource({
     synchronize: true,
     dropSchema: false, // Schema recreated with composite keys - back to false to preserve data
     logging: false,
-    entities: [User, Game, GameMechanic, CollectionGame],
+    entities: [User, Game, GameMechanic, CollectionGame, UserMechanic],
     migrations: [],
     subscribers: [],
 })

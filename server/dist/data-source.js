@@ -10,6 +10,7 @@ const User_1 = require("./entity/User");
 const Game_1 = require("./entity/Game");
 const GameMechanic_1 = require("./entity/GameMechanic");
 const CollectionGame_1 = require("./entity/CollectionGame");
+const UserMechanic_1 = require("./entity/UserMechanic");
 const dotenv_1 = __importDefault(require("dotenv"));
 // Load environment variables BEFORE creating DataSource
 dotenv_1.default.config();
@@ -23,7 +24,7 @@ exports.AppDataSource = new typeorm_1.DataSource({
     synchronize: true,
     dropSchema: false, // Schema recreated with composite keys - back to false to preserve data
     logging: false,
-    entities: [User_1.User, Game_1.Game, GameMechanic_1.GameMechanic, CollectionGame_1.CollectionGame],
+    entities: [User_1.User, Game_1.Game, GameMechanic_1.GameMechanic, CollectionGame_1.CollectionGame, UserMechanic_1.UserMechanic],
     migrations: [],
     subscribers: [],
 });

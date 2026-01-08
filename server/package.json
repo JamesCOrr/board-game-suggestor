@@ -13,7 +13,9 @@
     "dev": "tsc && node dist/server.js",
     "populate-collection": "tsc && node dist/scripts/populate-collection.js",
     "populate-games": "tsc && node dist/scripts/populate-games.js",
-    "populate-mechanics": "tsc && node dist/scripts/populate-mechanics.js"
+    "populate-mechanics": "tsc && node dist/scripts/populate-mechanics.js",
+    "populate-user-mechanics": "tsc && node dist/scripts/populate-user-mechanics.js",
+    "populate-all": "tsc && node dist/scripts/populate-all.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
