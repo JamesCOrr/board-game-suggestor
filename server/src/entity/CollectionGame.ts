@@ -1,19 +1,14 @@
-import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn, OneToOne, PrimaryGeneratedColumn, JoinColumn } from "typeorm";
-import { Game } from "./Game";
+import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn } from "typeorm";
 
 @Entity()
 export class CollectionGame {
-    
-    @PrimaryGeneratedColumn()
-    id: number
-
-    @Column()
+    @PrimaryColumn()
     bggId: number;
 
     @Column()
     gameName: string;
 
-    @Column()
+    @PrimaryColumn()
     userName: string;
 
     @Column()

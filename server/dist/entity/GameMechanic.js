@@ -13,23 +13,24 @@ exports.GameMechanic = void 0;
 const typeorm_1 = require("typeorm");
 const Game_1 = require("./Game");
 let GameMechanic = class GameMechanic {
-    id;
-    bggUrl;
+    mechanicName;
+    gameBggId;
     game;
     createdAt;
     updatedAt;
 };
 exports.GameMechanic = GameMechanic;
 __decorate([
-    (0, typeorm_1.PrimaryGeneratedColumn)(),
-    __metadata("design:type", Number)
-], GameMechanic.prototype, "id", void 0);
-__decorate([
-    (0, typeorm_1.Column)(),
+    (0, typeorm_1.PrimaryColumn)(),
     __metadata("design:type", String)
-], GameMechanic.prototype, "bggUrl", void 0);
+], GameMechanic.prototype, "mechanicName", void 0);
+__decorate([
+    (0, typeorm_1.PrimaryColumn)(),
+    __metadata("design:type", Number)
+], GameMechanic.prototype, "gameBggId", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => Game_1.Game, (game) => game.gameMechanics),
+    (0, typeorm_1.JoinColumn)({ name: "gameBggId" }),
     __metadata("design:type", Game_1.Game)
 ], GameMechanic.prototype, "game", void 0);
 __decorate([

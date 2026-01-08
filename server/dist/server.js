@@ -12,6 +12,7 @@ const User_1 = require("./entity/User");
 const xml2js_1 = require("xml2js");
 const CollectionGame_1 = require("./entity/CollectionGame");
 const Game_1 = require("./entity/Game");
+const GameMechanic_1 = require("./entity/GameMechanic");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
@@ -108,9 +109,27 @@ app.get("/api/games/:username", async (request, response) => {
                 username
             });
         }
-        // Fetch detailed game data for each game in the collection
-        const gameDetailsPromises = collectionGames.map(async (collectionGame) => {
-            const requestUrl = `${process.env.BGG_BASE_URL}thing?id=${collectionGame.bggId}&stats=1`;
+        // Extract all bggIds from collection
+        const bggIds = collectionGames.map(cg => cg.bggId);
+        // Check which games already exist in the database
+        const existingGames = await data_source_1.AppDataSource
+            .getRepository(Game_1.Game)
+            .createQueryBuilder("game")
+            .where("game.bggId IN (:...ids)", { ids: bggIds })
+            .getMany();
+        const existingBggIds = new Set(existingGames.map(g => g.bggId));
+        const missingBggIds = bggIds.filter(id => !existingBggIds.has(id));
+        console.log(`Found ${existingGames.length} games in database, fetching ${missingBggIds.length} from BGG`);
+        // Batch missing IDs into groups of 20
+        const batchSize = 20;
+        const batches = [];
+        for (let i = 0; i < missingBggIds.length; i += batchSize) {
+            batches.push(missingBggIds.slice(i, i + batchSize));
+        }
+        // Fetch and parse each batch
+        const newlyFetchedGames = [];
+        for (const batch of batches) {
+            const requestUrl = `${process.env.BGG_BASE_URL}thing?id=${batch.join(',')}&stats=1`;
             try {
                 const bggResponse = await fetch(requestUrl, {
                     headers: {
@@ -119,70 +138,192 @@ app.get("/api/games/:username", async (request, response) => {
                     }
                 });
                 if (!bggResponse.ok) {
-                    console.error(`Failed to fetch game ${collectionGame.bggId}: ${bggResponse.status}`);
-                    return null;
+                    console.error(`Failed to fetch batch: ${bggResponse.status}`);
+                    continue;
                 }
                 const xmlData = await bggResponse.text();
                 // Parse XML to JSON
-                return new Promise((resolve, reject) => {
+                await new Promise((resolve, reject) => {
                     parser.parseString(xmlData, async (err, result) => {
                         if (err) {
-                            console.error(`Error parsing game ${collectionGame.bggId}:`, err);
-                            return resolve(null);
+                            console.error('Error parsing batch:', err);
+                            return resolve();
                         }
                         try {
-                            const gameData = result.items.item[0];
-                            // Save/update game in database
-                            const gameEntity = new Game_1.Game();
-                            gameEntity.bggId = parseInt(gameData.$.id);
-                            gameEntity.gameName = Array.isArray(gameData.name)
-                                ? gameData.name.find((n) => n.$.type === 'primary')?.$.value || gameData.name[0].$.value
-                                : gameData.name.$.value;
-                            gameEntity.bggLink = `https://boardgamegeek.com/boardgame/${gameData.$.id}`;
-                            gameEntity.bggImageLink = gameData.image?.[0] || '';
-                            await data_source_1.AppDataSource.manager.save(gameEntity);
-                            // Return combined data
-                            resolve({
-                                bggId: gameEntity.bggId,
-                                gameName: gameEntity.gameName,
-                                bggImageLink: gameEntity.bggImageLink,
-                                userRating: collectionGame.userRating,
-                                yearPublished: gameData.yearpublished?.[0]?.$.value,
-                                minPlayers: gameData.minplayers?.[0]?.$.value,
-                                maxPlayers: gameData.maxplayers?.[0]?.$.value,
-                                playingTime: gameData.playingtime?.[0]?.$.value,
-                                minPlayTime: gameData.minplaytime?.[0]?.$.value,
-                                maxPlayTime: gameData.maxplaytime?.[0]?.$.value,
-                                minAge: gameData.minage?.[0]?.$.value,
-                                description: gameData.description?.[0],
-                                averageRating: gameData.statistics?.[0]?.ratings?.[0]?.average?.[0]?.$.value,
-                                bggRank: gameData.statistics?.[0]?.ratings?.[0]?.ranks?.[0]?.rank?.find((r) => r.$.id === '1')?.$.value
-                            });
+                            const items = result.items.item;
+                            if (!items) {
+                                return resolve();
+                            }
+                            // Process each game in the batch
+                            for (const gameData of items) {
+                                const gameEntity = new Game_1.Game();
+                                gameEntity.bggId = parseInt(gameData.$.id);
+                                gameEntity.gameName = Array.isArray(gameData.name)
+                                    ? gameData.name.find((n) => n.$.type === 'primary')?.$.value || gameData.name[0].$.value
+                                    : gameData.name.$.value;
+                                gameEntity.bggLink = `https://boardgamegeek.com/boardgame/${gameData.$.id}`;
+                                gameEntity.bggImageLink = gameData.image?.[0] || '';
+                                await data_source_1.AppDataSource.manager.save(gameEntity);
+                                newlyFetchedGames.push(gameEntity);
+                            }
+                            resolve();
                         }
                         catch (e) {
-                            console.error(`Error processing game ${collectionGame.bggId}:`, e);
-                            resolve(null);
+                            console.error('Error processing batch:', e);
+                            resolve();
                         }
                     });
                 });
             }
             catch (error) {
-                console.error(`Error fetching game ${collectionGame.bggId}:`, error);
-                return null;
+                console.error('Error fetching batch:', error);
             }
-        });
-        // Wait for all game details to be fetched
-        const allGameDetails = await Promise.all(gameDetailsPromises);
-        // Filter out any failed fetches
-        const successfulGames = allGameDetails.filter(game => game !== null);
+        }
+        // Combine existing and newly fetched games
+        const allGames = [...existingGames, ...newlyFetchedGames];
+        // Create a map for quick lookup
+        const gameMap = new Map(allGames.map(g => [g.bggId, g]));
+        // Combine game data with user collection data
+        const combinedGames = collectionGames.map(collectionGame => {
+            const game = gameMap.get(collectionGame.bggId);
+            if (!game)
+                return null;
+            return {
+                bggId: game.bggId,
+                gameName: game.gameName,
+                bggLink: game.bggLink,
+                bggImageLink: game.bggImageLink,
+                userRating: collectionGame.userRating
+            };
+        }).filter(g => g !== null);
         response.status(200).json({
             username,
-            totalGames: successfulGames.length,
-            games: successfulGames
+            totalGames: combinedGames.length,
+            fromCache: existingGames.length,
+            fromApi: newlyFetchedGames.length,
+            games: combinedGames
         });
     }
     catch (error) {
         console.error('Error fetching games:', error);
+        response.status(500).json({
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+// Populate mechanics for games in the database
+app.get("/api/populate-mechanics", async (request, response) => {
+    try {
+        // Get all games from the database
+        const allGames = await data_source_1.AppDataSource
+            .getRepository(Game_1.Game)
+            .createQueryBuilder("game")
+            .leftJoinAndSelect("game.gameMechanics", "mechanics")
+            .getMany();
+        if (allGames.length === 0) {
+            return response.status(404).json({
+                error: 'No games found in database'
+            });
+        }
+        // Filter games that don't have mechanics yet (optional - can be removed to refresh all)
+        const gamesNeedingMechanics = allGames.filter(game => !game.gameMechanics || game.gameMechanics.length === 0);
+        if (gamesNeedingMechanics.length === 0) {
+            return response.status(200).json({
+                message: 'All games already have mechanics populated',
+                totalGames: allGames.length
+            });
+        }
+        console.log(`Populating mechanics for ${gamesNeedingMechanics.length} games`);
+        // Batch games into groups of 20
+        const batchSize = 20;
+        const batches = [];
+        for (let i = 0; i < gamesNeedingMechanics.length; i += batchSize) {
+            batches.push(gamesNeedingMechanics.slice(i, i + batchSize));
+        }
+        let totalMechanicsAdded = 0;
+        let gamesProcessed = 0;
+        // Process each batch
+        for (const batch of batches) {
+            const bggIds = batch.map(g => g.bggId).join(',');
+            const requestUrl = `${process.env.BGG_BASE_URL}thing?id=${bggIds}&stats=1`;
+            try {
+                const bggResponse = await fetch(requestUrl, {
+                    headers: {
+                        'Accept': 'application/xml',
+                        'Authorization': `Bearer ${process.env.BGG_API_KEY}`
+                    }
+                });
+                if (!bggResponse.ok) {
+                    console.error(`Failed to fetch batch: ${bggResponse.status}`);
+                    continue;
+                }
+                const xmlData = await bggResponse.text();
+                // Parse XML to JSON
+                await new Promise((resolve, reject) => {
+                    parser.parseString(xmlData, async (err, result) => {
+                        if (err) {
+                            console.error('Error parsing batch:', err);
+                            return resolve();
+                        }
+                        try {
+                            const items = result.items.item;
+                            if (!items) {
+                                return resolve();
+                            }
+                            // Process each game in the batch
+                            for (const gameData of items) {
+                                const bggId = parseInt(gameData.$.id);
+                                const game = batch.find(g => g.bggId === bggId);
+                                if (!game)
+                                    continue;
+                                // Extract mechanics from the game data
+                                // Mechanics are in links with type="boardgamemechanic"
+                                const links = gameData.link || [];
+                                const mechanics = links.filter((link) => link.$.type === 'boardgamemechanic');
+                                // Save each mechanic
+                                for (const mechanic of mechanics) {
+                                    const gameMechanic = new GameMechanic_1.GameMechanic();
+                                    gameMechanic.mechanicName = mechanic.$.value;
+                                    gameMechanic.gameBggId = game.bggId;
+                                    gameMechanic.game = game;
+                                    try {
+                                        await data_source_1.AppDataSource.manager.save(gameMechanic);
+                                        totalMechanicsAdded++;
+                                    }
+                                    catch (e) {
+                                        console.error(`Error saving mechanic for game ${bggId}:`, e);
+                                    }
+                                }
+                                gamesProcessed++;
+                            }
+                            resolve();
+                        }
+                        catch (e) {
+                            console.error('Error processing batch:', e);
+                            resolve();
+                        }
+                    });
+                });
+                // Be nice to BGG API - add a small delay between batches
+                if (batches.indexOf(batch) < batches.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            catch (error) {
+                console.error('Error fetching batch:', error);
+            }
+        }
+        response.status(200).json({
+            message: 'Mechanics population complete',
+            gamesProcessed,
+            totalMechanicsAdded,
+            totalGamesInDb: allGames.length,
+            gamesNeedingMechanics: gamesNeedingMechanics.length
+        });
+    }
+    catch (error) {
+        console.error('Error populating mechanics:', error);
         response.status(500).json({
             error: 'Internal server error',
             message: error instanceof Error ? error.message : 'Unknown error'

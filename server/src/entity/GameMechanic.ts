@@ -1,16 +1,17 @@
-import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryGeneratedColumn, ManyToOne } from "typeorm";
+import { Entity, Column, CreateDateColumn, UpdateDateColumn, PrimaryColumn, ManyToOne, JoinColumn } from "typeorm";
 import { Game } from "./Game";
 
 @Entity()
 export class GameMechanic {
 
-    @PrimaryGeneratedColumn()
-    id: number;
+    @PrimaryColumn()
+    mechanicName: string;
 
-    @Column()
-    bggUrl: string;
+    @PrimaryColumn()
+    gameBggId: number;
 
     @ManyToOne(() => Game, (game) => game.gameMechanics)
+    @JoinColumn({ name: "gameBggId" })
     game: Game;
 
     @CreateDateColumn()
