@@ -1,9 +1,5 @@
 import './App.css';
-
-const baseUrl = 'https://boardgamegeek.com/xmlapi2/';
-const user = '@James_Orr';
-const parameters =`?name=${user}`;
-const url = baseUrl + parameters;
+import poweredByBgg from './assets/powered-by-bgg-reversed-rgb.svg';
 
 function App() {
 
@@ -15,6 +11,8 @@ function App() {
             Request User Data
           </button>
         </div>
+        <img src={poweredByBgg} alt="Powered by BoardGameGeek" />
+
       </div>
   )
 }
