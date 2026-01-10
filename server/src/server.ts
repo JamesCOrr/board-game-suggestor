@@ -398,6 +398,89 @@ app.post("/api/user/collection/:username", async (request: Request, response: Re
   }
 });
 
+// Get user's collection with game metadata for display
+app.get("/api/user/collection/:username", async (request: Request, response: Response) => {
+  try {
+    const username = request.params.username || '';
+
+    if (!username) {
+      return response.status(400).json({
+        error: 'Username is required'
+      });
+    }
+
+    // Get all games from user's collection
+    const collectionGames = await AppDataSource
+      .getRepository(CollectionGame)
+      .createQueryBuilder("collection_game")
+      .where("collection_game.userName = :username", { username })
+      .getMany();
+
+    if (collectionGames.length === 0) {
+      return response.status(404).json({
+        error: 'No games found for this user',
+        username
+      });
+    }
+
+    // Get all bggIds from collection
+    const bggIds = collectionGames.map(cg => cg.bggId);
+
+    // Get corresponding game metadata
+    const games = await AppDataSource
+      .getRepository(Game)
+      .createQueryBuilder("game")
+      .where("game.bggId IN (:...ids)", { ids: bggIds })
+      .getMany();
+
+    // Get game mechanics for these games
+    const gameMechanics = await AppDataSource
+      .getRepository(GameMechanic)
+      .createQueryBuilder("game_mechanic")
+      .where("game_mechanic.gameBggId IN (:...ids)", { ids: bggIds })
+      .getMany();
+
+    // Create a map for quick lookup
+    const gameMap = new Map(games.map(g => [g.bggId, g]));
+
+    // Group mechanics by game
+    const mechanicsMap = new Map<number, string[]>();
+    for (const mechanic of gameMechanics) {
+      if (!mechanicsMap.has(mechanic.gameBggId)) {
+        mechanicsMap.set(mechanic.gameBggId, []);
+      }
+      mechanicsMap.get(mechanic.gameBggId)!.push(mechanic.mechanicName);
+    }
+
+    // Combine collection data with game metadata
+    const collectionWithMetadata = collectionGames.map(collectionGame => {
+      const game = gameMap.get(collectionGame.bggId);
+
+      return {
+        bggId: collectionGame.bggId,
+        gameName: game?.gameName || collectionGame.gameName,
+        bggLink: game?.bggLink || `https://boardgamegeek.com/boardgame/${collectionGame.bggId}`,
+        bggImageLink: game?.bggImageLink || '',
+        userRating: collectionGame.userRating,
+        mechanics: mechanicsMap.get(collectionGame.bggId) || []
+      };
+    });
+
+    response.status(200).json({
+      username,
+      totalGames: collectionWithMetadata.length,
+      games: collectionWithMetadata
+    });
+
+  } catch (error) {
+    console.error('Error fetching collection:', error);
+    response.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 app.listen(PORT, () => { 
   console.log("Server running at PORT: ", PORT); 
 }).on("error", (error: any) => {

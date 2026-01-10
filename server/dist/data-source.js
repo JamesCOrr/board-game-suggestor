@@ -12,7 +12,6 @@ const GameMechanic_1 = require("./entity/GameMechanic");
 const CollectionGame_1 = require("./entity/CollectionGame");
 const UserMechanic_1 = require("./entity/UserMechanic");
 const dotenv_1 = __importDefault(require("dotenv"));
-// Load environment variables BEFORE creating DataSource
 dotenv_1.default.config();
 exports.AppDataSource = new typeorm_1.DataSource({
     type: "mysql",
