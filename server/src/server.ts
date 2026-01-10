@@ -8,6 +8,7 @@ import { Parser } from "xml2js";
 import { CollectionGame } from "./entity/CollectionGame";
 import { Game } from "./entity/Game";
 import { GameMechanic } from "./entity/GameMechanic";
+import { UserMechanic } from "./entity/UserMechanic";
 
 dotenv.config();
 const app = express();
@@ -22,11 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT;
 const parser = new Parser();
 
-AppDataSource.initialize().then(async () => {
-    const user = new User()
-    user.userName = "James_Orr"
-    await AppDataSource.manager.save(user)
-}).catch(error => console.log(error))
+AppDataSource.initialize();
 
 
 // Health check endpoint
@@ -40,13 +37,29 @@ app.get("/", (request: Request, response: Response) => {
 
 // API Routes
 
-// Get user's board game collection from BoardGameGeek
-app.get("/api/user/collections/:username", async (request: Request, response: Response) => {
+// Populate all data for a user (collection, games, mechanics, user mechanics)
+app.get("/api/user/collection/:username", async (request: Request, response: Response) => {
   try {
     const username = request.params.username || '';
 
-    const requestUrl = `${process.env.BGG_BASE_URL}collection?username=${username}&stats=1`;
+    if (!username) {
+      return response.status(400).json({
+        error: 'Username is required'
+      });
+    }
 
+    // Step 0: Create or check for user entity
+    const userRepo = AppDataSource.getRepository(User);
+    let user = await userRepo.findOne({ where: { userName: username } });
+
+    if (!user) {
+      user = new User();
+      user.userName = username;
+      await userRepo.save(user);
+    }
+
+    // Step 1: Populate collection
+    const requestUrl = `${process.env.BGG_BASE_URL}collection?username=${username}&stats=1`;
     const bggResponse = await fetch(requestUrl, {
       headers: {
         'Accept': 'application/xml',
@@ -70,32 +83,314 @@ app.get("/api/user/collections/:username", async (request: Request, response: Re
       });
     }
 
+    // Parse and save collection data
+    const collectionResult = await new Promise<number>((resolve, reject) => {
+      parser.parseString(xmlData, async (err, result) => {
+        if (err) {
+          return reject(err);
+        }
 
-    parser.parseString(xmlData, function (err, result) {
-      response.set('Content-Type', 'application/json');
-      const jsonData = result;
-
-      // TODO: Make game object shape
-      jsonData.items.item.forEach(async (game: any) => {
-        const collectionGame = new CollectionGame();
-        collectionGame.bggId = game.$.objectid;
-        collectionGame.gameName = game.name[0]._;
-        collectionGame.userName = username;
-        collectionGame.userRating = game.stats[0].rating[0].$.value;
         try {
-          await AppDataSource.manager.save(collectionGame);
+          if (!result || !result.items || !result.items.item) {
+            return resolve(0);
+          }
+
+          const items = result.items.item;
+          let savedCount = 0;
+
+          for (const game of items) {
+            try {
+              if (!game || !game.$ || !game.name || !game.name[0]) {
+                continue;
+              }
+
+              const collectionGame = new CollectionGame();
+              collectionGame.bggId = parseInt(game.$.objectid);
+              collectionGame.gameName = game.name[0]._;
+              collectionGame.userName = username;
+              collectionGame.userRating = game.stats?.[0]?.rating?.[0]?.$?.value || "0";
+
+              await AppDataSource.manager.save(collectionGame);
+              savedCount++;
+            } catch (e) {
+              // Skip if already exists or other error
+              continue;
+            }
+          }
+
+          resolve(savedCount);
         } catch (e) {
-          console.error(e);
+          reject(e);
         }
       });
-
-      response.send(jsonData);
     });
 
+    // Step 2: Populate game metadata
+    const collectionGames = await AppDataSource
+      .getRepository(CollectionGame)
+      .createQueryBuilder("collection_game")
+      .where("collection_game.userName = :username", { username })
+      .getMany();
 
-    
+    if (collectionGames.length === 0) {
+      return response.status(404).json({
+        error: 'No games found in collection',
+        username
+      });
+    }
+
+    const bggIds = collectionGames.map(cg => cg.bggId);
+    const existingGames = await AppDataSource
+      .getRepository(Game)
+      .createQueryBuilder("game")
+      .where("game.bggId IN (:...ids)", { ids: bggIds })
+      .getMany();
+
+    const existingBggIds = new Set(existingGames.map(g => g.bggId));
+    const missingBggIds = bggIds.filter(id => !existingBggIds.has(id));
+
+    // Fetch missing games in batches
+    const batchSize = 20;
+    const batches: number[][] = [];
+    for (let i = 0; i < missingBggIds.length; i += batchSize) {
+      batches.push(missingBggIds.slice(i, i + batchSize));
+    }
+
+    const newlyFetchedGames: Game[] = [];
+    for (const batch of batches) {
+      if (!batch || batch.length === 0) continue;
+
+      const gameRequestUrl = `${process.env.BGG_BASE_URL}thing?id=${batch.join(",")}&stats=1`;
+
+      try {
+        const gameResponse = await fetch(gameRequestUrl, {
+          headers: {
+            'Accept': 'application/xml',
+            'Authorization': `Bearer ${process.env.BGG_API_KEY}`
+          }
+        });
+
+        if (!gameResponse.ok) {
+          continue;
+        }
+
+        const gameXmlData = await gameResponse.text();
+
+        await new Promise<void>((resolve, reject) => {
+          parser.parseString(gameXmlData, async (err, result) => {
+            if (err) {
+              return resolve();
+            }
+
+            try {
+              if (!result || !result.items || !result.items.item) {
+                return resolve();
+              }
+
+              const items = result.items.item;
+
+              for (const gameData of items) {
+                if (!gameData || !gameData.$ || !gameData.$.id) {
+                  continue;
+                }
+
+                try {
+                  const gameEntity = new Game();
+                  gameEntity.bggId = parseInt(gameData.$.id);
+                  gameEntity.gameName = Array.isArray(gameData.name)
+                    ? gameData.name.find((n: any) => n.$.type === "primary")?.$.value || gameData.name[0].$.value
+                    : gameData.name.$.value;
+                  gameEntity.bggLink = `https://boardgamegeek.com/boardgame/${gameData.$.id}`;
+                  gameEntity.bggImageLink = gameData.image?.[0] || "";
+
+                  await AppDataSource.manager.save(gameEntity);
+                  newlyFetchedGames.push(gameEntity);
+                } catch (e) {
+                  // Skip if error
+                  continue;
+                }
+              }
+
+              resolve();
+            } catch (e) {
+              resolve();
+            }
+          });
+        });
+
+        // Small delay between batches
+        if (batches.indexOf(batch) < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        // Continue with next batch
+        continue;
+      }
+    }
+
+    // Step 3: Populate mechanics for all games
+    const allGames = await AppDataSource
+      .getRepository(Game)
+      .createQueryBuilder("game")
+      .leftJoinAndSelect("game.gameMechanics", "mechanics")
+      .where("game.bggId IN (:...ids)", { ids: bggIds })
+      .getMany();
+
+    const gamesNeedingMechanics = allGames.filter(game => !game.gameMechanics || game.gameMechanics.length === 0);
+
+    const mechanicBatches: Game[][] = [];
+    for (let i = 0; i < gamesNeedingMechanics.length; i += batchSize) {
+      mechanicBatches.push(gamesNeedingMechanics.slice(i, i + batchSize));
+    }
+
+    let totalMechanicsAdded = 0;
+
+    for (const batch of mechanicBatches) {
+      if (!batch || batch.length === 0) continue;
+
+      const mechanicBggIds = batch.map(g => g.bggId).join(',');
+      if (!mechanicBggIds) continue;
+
+      const mechanicRequestUrl = `${process.env.BGG_BASE_URL}thing?id=${mechanicBggIds}&stats=1`;
+
+      try {
+        const mechanicResponse = await fetch(mechanicRequestUrl, {
+          headers: {
+            'Accept': 'application/xml',
+            'Authorization': `Bearer ${process.env.BGG_API_KEY}`
+          }
+        });
+
+        if (!mechanicResponse.ok) {
+          continue;
+        }
+
+        const mechanicXmlData = await mechanicResponse.text();
+
+        await new Promise<void>((resolve, reject) => {
+          parser.parseString(mechanicXmlData, async (err, result) => {
+            if (err) {
+              return resolve();
+            }
+
+            try {
+              if (!result || !result.items || !result.items.item) {
+                return resolve();
+              }
+
+              const items = result.items.item;
+
+              for (const gameData of items) {
+                if (!gameData || !gameData.$ || !gameData.$.id) {
+                  continue;
+                }
+
+                const bggId = parseInt(gameData.$.id);
+                const game = batch.find(g => g.bggId === bggId);
+
+                if (!game) continue;
+
+                const links = gameData.link || [];
+                const mechanics = links.filter((link: any) => link && link.$ && link.$.type === 'boardgamemechanic');
+
+                for (const mechanic of mechanics) {
+                  if (!mechanic || !mechanic.$ || !mechanic.$.value) {
+                    continue;
+                  }
+
+                  const gameMechanic = new GameMechanic();
+                  gameMechanic.mechanicName = mechanic.$.value;
+                  gameMechanic.gameBggId = game.bggId;
+                  gameMechanic.game = game;
+
+                  try {
+                    await AppDataSource.manager.save(gameMechanic);
+                    totalMechanicsAdded++;
+                  } catch (e) {
+                    // Skip if already exists or other error
+                    continue;
+                  }
+                }
+              }
+
+              resolve();
+            } catch (e) {
+              resolve();
+            }
+          });
+        });
+
+        if (mechanicBatches.indexOf(batch) < mechanicBatches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    // Step 4: Populate user mechanics
+    const gameMechanics = await AppDataSource
+      .getRepository(GameMechanic)
+      .createQueryBuilder("game_mechanic")
+      .where("game_mechanic.gameBggId IN (:...ids)", { ids: bggIds })
+      .getMany();
+
+    const ratingMap = new Map<number, number>();
+    for (const game of collectionGames) {
+      const rating = parseFloat(game.userRating);
+      if (!isNaN(rating) && rating > 0) {
+        ratingMap.set(game.bggId, rating);
+      }
+    }
+
+    const mechanicRatings = new Map<string, number[]>();
+
+    for (const mechanic of gameMechanics) {
+      const rating = ratingMap.get(mechanic.gameBggId);
+      if (rating !== undefined) {
+        if (!mechanicRatings.has(mechanic.mechanicName)) {
+          mechanicRatings.set(mechanic.mechanicName, []);
+        }
+        mechanicRatings.get(mechanic.mechanicName)!.push(rating);
+      }
+    }
+
+    let userMechanicsSaved = 0;
+
+    for (const [mechanicName, ratings] of mechanicRatings.entries()) {
+      try {
+        const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+        const average = sum / ratings.length;
+
+        const userMechanic = new UserMechanic();
+        userMechanic.userName = username;
+        userMechanic.mechanicName = mechanicName;
+        userMechanic.averageRating = parseFloat(average.toFixed(2));
+        userMechanic.gameCount = ratings.length;
+
+        await AppDataSource.manager.save(userMechanic);
+        userMechanicsSaved++;
+      } catch (e) {
+        // Skip if already exists or other error
+        continue;
+      }
+    }
+
+    response.status(200).json({
+      message: 'All data population complete',
+      username,
+      stats: {
+        collectionGames: collectionResult,
+        totalGamesInCollection: collectionGames.length,
+        existingGames: existingGames.length,
+        newlyFetchedGames: newlyFetchedGames.length,
+        mechanicsAdded: totalMechanicsAdded,
+        userMechanicsSaved: userMechanicsSaved
+      }
+    });
+
   } catch (error) {
-    console.error('Error fetching BGG collection:', error);
+    console.error('Error populating user data:', error);
     response.status(500).json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'

@@ -22,7 +22,7 @@ exports.AppDataSource = new typeorm_1.DataSource({
     password: process.env.MYSQL_PASSWORD || "",
     database: process.env.MYSQL_DATABASE || "board_game_suggestor_dev_db",
     synchronize: true,
-    dropSchema: false,
+    dropSchema: true,
     logging: false,
     entities: [User_1.User, Game_1.Game, GameMechanic_1.GameMechanic, CollectionGame_1.CollectionGame, UserMechanic_1.UserMechanic],
     migrations: [],
