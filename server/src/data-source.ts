@@ -7,7 +7,6 @@ import { CollectionGame } from "./entity/CollectionGame"
 import { UserMechanic } from "./entity/UserMechanic"
 import dotenv from "dotenv";
 
-// Load environment variables BEFORE creating DataSource
 dotenv.config();
 
 export const AppDataSource = new DataSource({
@@ -18,7 +17,7 @@ export const AppDataSource = new DataSource({
     password: process.env.MYSQL_PASSWORD || "",
     database: process.env.MYSQL_DATABASE || "board_game_suggestor_dev_db",
     synchronize: true,
-    dropSchema: true,
+    dropSchema: false,
     logging: false,
     entities: [User, Game, GameMechanic, CollectionGame, UserMechanic],
     migrations: [],

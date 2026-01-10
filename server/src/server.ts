@@ -38,7 +38,7 @@ app.get("/", (request: Request, response: Response) => {
 // API Routes
 
 // Populate all data for a user (collection, games, mechanics, user mechanics)
-app.get("/api/user/collection/:username", async (request: Request, response: Response) => {
+app.post("/api/user/collection/:username", async (request: Request, response: Response) => {
   try {
     const username = request.params.username || '';
 
@@ -396,32 +396,6 @@ app.get("/api/user/collection/:username", async (request: Request, response: Res
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-});
-
-// TODO: Get game suggestions based on preferences
-app.post("/api/suggestions", (request: Request, response: Response) => {
-  const { players, duration, complexity, category } = request.body;
-
-  // TODO: Implement logic to fetch/filter games based on preferences
-  // For now, return mock data
-  response.json({
-    message: "Game suggestions endpoint",
-    preferences: {
-      players,
-      duration,
-      complexity,
-      category
-    },
-    suggestions: [
-      {
-        id: 1,
-        name: "Sample Board Game",
-        players: "2-4",
-        duration: "60 minutes",
-        complexity: "medium"
-      }
-    ]
-  });
 });
 
 app.listen(PORT, () => { 
