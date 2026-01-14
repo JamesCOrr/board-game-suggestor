@@ -22,6 +22,7 @@ interface Game {
   bggLink: string;
   bggImageLink: string;
   userRating: string;
+  averageRating: number | null;
   mechanics: string[];
 }
 
@@ -39,7 +40,7 @@ export default function CollectionTable({ username }: CollectionTableProps) {
   const [collection, setCollection] = useState<CollectionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortColumn, setSortColumn] = useState<'gameName' | 'userRating'>('gameName');
+  const [sortColumn, setSortColumn] = useState<'gameName' | 'userRating' | 'averageRating'>('gameName');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
@@ -107,7 +108,7 @@ export default function CollectionTable({ username }: CollectionTableProps) {
     );
   }
 
-  const handleSortToggle = (column: 'gameName' | 'userRating') => {
+  const handleSortToggle = (column: 'gameName' | 'userRating' | 'averageRating') => {
     if (sortColumn === column) {
       // Toggle order if clicking the same column
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -127,6 +128,11 @@ export default function CollectionTable({ username }: CollectionTableProps) {
       // Convert "N/A" and invalid ratings to 0
       const ratingA = a.userRating === 'N/A' ? 0 : parseFloat(a.userRating) || 0;
       const ratingB = b.userRating === 'N/A' ? 0 : parseFloat(b.userRating) || 0;
+      comparison = ratingA - ratingB;
+    } else if (sortColumn === 'averageRating') {
+      // Convert null to 0 for sorting
+      const ratingA = a.averageRating ?? 0;
+      const ratingB = b.averageRating ?? 0;
       comparison = ratingA - ratingB;
     }
 
@@ -170,6 +176,20 @@ export default function CollectionTable({ username }: CollectionTableProps) {
                   }}
                 >
                   User Rating
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
+                <TableSortLabel
+                  active={sortColumn === 'averageRating'}
+                  direction={sortColumn === 'averageRating' ? sortOrder : 'asc'}
+                  onClick={() => handleSortToggle('averageRating')}
+                  sx={{
+                    '& .MuiTableSortLabel-icon': {
+                      color: 'primary.main !important',
+                    },
+                  }}
+                >
+                  Average Rating
                 </TableSortLabel>
               </TableCell>
               <TableCell sx={{ fontWeight: 'bold', fontSize: '1rem' }}>Mechanics</TableCell>
@@ -243,6 +263,17 @@ export default function CollectionTable({ username }: CollectionTableProps) {
                     }}
                   >
                     {game.userRating !== '0' && game.userRating !== 'N/A' ? game.userRating : 'Not Rated'}
+                  </Typography>
+                </TableCell>
+                <TableCell align="center">
+                  <Typography
+                    variant="body1"
+                    fontWeight="bold"
+                    sx={{
+                      color: game.averageRating != null ? 'primary.light' : 'text.secondary',
+                    }}
+                  >
+                    {game.averageRating != null ? Number(game.averageRating).toFixed(2) : 'N/A'}
                   </Typography>
                 </TableCell>
                 <TableCell>

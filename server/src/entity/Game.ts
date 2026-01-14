@@ -16,6 +16,9 @@ export class Game {
     @Column()
     bggImageLink: string;
 
+    @Column("decimal", { precision: 4, scale: 2, nullable: true })
+    averageRating: number | null;
+
     @OneToMany(() => GameMechanic, (gameMechanic) => gameMechanic.game)
     gameMechanics: GameMechanic[];
 

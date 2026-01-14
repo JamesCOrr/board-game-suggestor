@@ -173,6 +173,9 @@ app.post("/api/user/collection/:username", async (request, response) => {
                                         : gameData.name.$.value;
                                     gameEntity.bggLink = `https://boardgamegeek.com/boardgame/${gameData.$.id}`;
                                     gameEntity.bggImageLink = gameData.image?.[0] || "";
+                                    // Extract average rating from statistics
+                                    const avgRating = gameData.statistics?.[0]?.ratings?.[0]?.average?.[0]?.$.value;
+                                    gameEntity.averageRating = avgRating ? parseFloat(avgRating) : null;
                                     await data_source_1.AppDataSource.manager.save(gameEntity);
                                     newlyFetchedGames.push(gameEntity);
                                 }
@@ -398,6 +401,7 @@ app.get("/api/user/collection/:username", async (request, response) => {
                 bggLink: game?.bggLink || `https://boardgamegeek.com/boardgame/${collectionGame.bggId}`,
                 bggImageLink: game?.bggImageLink || '',
                 userRating: collectionGame.userRating,
+                averageRating: game?.averageRating || null,
                 mechanics: mechanicsMap.get(collectionGame.bggId) || []
             };
         });

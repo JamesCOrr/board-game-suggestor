@@ -17,6 +17,7 @@ let Game = class Game {
     gameName;
     bggLink;
     bggImageLink;
+    averageRating;
     gameMechanics;
     createdAt;
     updatedAt;
@@ -38,6 +39,10 @@ __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", String)
 ], Game.prototype, "bggImageLink", void 0);
+__decorate([
+    (0, typeorm_1.Column)("decimal", { precision: 4, scale: 2, nullable: true }),
+    __metadata("design:type", Object)
+], Game.prototype, "averageRating", void 0);
 __decorate([
     (0, typeorm_1.OneToMany)(() => GameMechanic_1.GameMechanic, (gameMechanic) => gameMechanic.game),
     __metadata("design:type", Array)

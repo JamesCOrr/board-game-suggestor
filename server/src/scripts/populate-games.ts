@@ -148,6 +148,10 @@ async function populateGames() {
                   gameEntity.bggLink = `https://boardgamegeek.com/boardgame/${gameData.$.id}`;
                   gameEntity.bggImageLink = gameData.image?.[0] || "";
 
+                  // Extract average rating from statistics
+                  const avgRating = gameData.statistics?.[0]?.ratings?.[0]?.average?.[0]?.$.value;
+                  gameEntity.averageRating = avgRating ? parseFloat(avgRating) : null;
+
                   await AppDataSource.manager.save(gameEntity);
                   newlyFetchedGames.push(gameEntity);
                 } catch (e) {

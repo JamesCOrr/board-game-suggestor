@@ -4,6 +4,7 @@ export declare class Game {
     gameName: string;
     bggLink: string;
     bggImageLink: string;
+    averageRating: number | null;
     gameMechanics: GameMechanic[];
     createdAt: Date;
     updatedAt: Date;
