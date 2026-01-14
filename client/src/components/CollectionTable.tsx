@@ -124,8 +124,9 @@ export default function CollectionTable({ username }: CollectionTableProps) {
     if (sortColumn === 'gameName') {
       comparison = a.gameName.localeCompare(b.gameName);
     } else if (sortColumn === 'userRating') {
-      const ratingA = parseFloat(a.userRating);
-      const ratingB = parseFloat(b.userRating);
+      // Convert "N/A" and invalid ratings to 0
+      const ratingA = a.userRating === 'N/A' ? 0 : parseFloat(a.userRating) || 0;
+      const ratingB = b.userRating === 'N/A' ? 0 : parseFloat(b.userRating) || 0;
       comparison = ratingA - ratingB;
     }
 
@@ -238,10 +239,10 @@ export default function CollectionTable({ username }: CollectionTableProps) {
                     variant="body1"
                     fontWeight="bold"
                     sx={{
-                      color: game.userRating !== '0' ? 'secondary.main' : 'text.secondary',
+                      color: game.userRating !== '0' && game.userRating !== 'N/A' ? 'secondary.main' : 'text.secondary',
                     }}
                   >
-                    {game.userRating !== '0' ? game.userRating : 'Not Rated'}
+                    {game.userRating !== '0' && game.userRating !== 'N/A' ? game.userRating : 'Not Rated'}
                   </Typography>
                 </TableCell>
                 <TableCell>
